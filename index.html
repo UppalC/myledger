@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyLedger ERP v108.0 | Elite Edition</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;600;900&display=swap');
+        body { font-family: 'Outfit', sans-serif; background: #f1f5f9; color: #0f172a; }
+
+        /* 3D Shining Buttons */
+        .btn-3d {
+            background: linear-gradient(145deg, #6366f1, #4338ca);
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 4px 4px 10px #cbd5e1, -2px -2px 8px #ffffff, inset 0 1px 2px rgba(255,255,255,0.4);
+            transition: all 0.2s ease;
+            color: white; font-weight: 800; text-transform: uppercase;
+        }
+        .btn-3d:active { transform: scale(0.96); box-shadow: inset 2px 2px 5px rgba(0,0,0,0.2); }
+        .btn-3d-rose { background: linear-gradient(145deg, #f43f5e, #be123c); }
+        .btn-3d-amber { background: linear-gradient(145deg, #f59e0b, #b45309); }
+        .btn-3d-emerald { background: linear-gradient(145deg, #10b981, #047857); }
+
+        /* Tooltip Popup */
+        .tip-parent { position: relative; }
+        .tip-parent:hover::after {
+            content: attr(data-msg); position: absolute; top: 110%; left: 50%; transform: translateX(-50%);
+            background: #1e293b; color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 10px;
+            white-space: nowrap; z-index: 100; box-shadow: 0 10px 20px rgba(0,0,0,0.2);
+        }
+
+        .glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+        .hidden-module { display: none !important; }
+        @media print { .no-print { display: none !important; } }
+    </style>
+</head>
+<body>
+
+    <div id="loader" class="fixed inset-0 bg-slate-900 z-[999] hidden flex flex-col items-center justify-center">
+        <div class="w-20 h-2 border-4 border-indigo-500 rounded-full overflow-hidden w-48 bg-slate-700">
+            <div class="h-full bg-indigo-400 animate-[pulse_1.5s_infinite]"></div>
+        </div>
+        <p class="text-white font-black text-[10px] mt-4 tracking-[0.6em] uppercase">Securing Enterprise Assets</p>
+    </div>
+
+    <div id="authSection" class="min-h-screen flex items-center justify-center bg-slate-900 p-4">
+        <div class="bg-white p-10 rounded-[3.5rem] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)] w-full max-w-xl border-t-[15px] border-indigo-600">
+            <div class="text-center mb-8">
+                <h2 class="font-black text-4xl italic uppercase text-slate-900">Ledger Master</h2>
+                <span class="bg-indigo-100 text-indigo-600 px-3 py-1 rounded-full text-[9px] font-black uppercase">v108.0 Enterprise</span>
+            </div>
+
+            <div id="agreementContainer" class="hidden space-y-4">
+                <div class="bg-slate-50 p-6 rounded-3xl border-2 border-slate-200 h-64 overflow-y-auto text-[11px] font-bold text-slate-600 uppercase leading-relaxed shadow-inner">
+                    <p class="text-rose-600 font-black mb-4 text-center border-b-2 border-rose-100 pb-2">User Safety & Liability Agreement</p>
+                    1. <b>LEGAL PROTECTION:</b> Main ye software bhalai ke liye bana raha hon, lekin kisi bhi kism ke business loss ya data loss ka zimadar software provider nahi hoga.<br><br>
+                    2. <b>BACKUP RESPONSIBILITY:</b> Cloud backup aik saholat hai. Browser clear hone ya internet masle ki surat mein data bachane ke liye user ko <b>WEEKLY OFFLINE BACKUP (.ledger file)</b> lazmi lena hoga.<br><br>
+                    3. <b>DATA PRIVACY:</b> Aap ka data end-to-end encrypted hai, lekin apna password mehfooz rakhna aap ki zimadar hai.<br><br>
+                    4. <b>RESTORATION:</b> Agar aap password bhol gaye ya backup file kho di, to data wapas nahi mil sakega.<br><br>
+                    5. <b>USER CONSENT:</b> Register karne ka matlab hai ke aap ne tamam sharait maan li hain aur kisi bhi nuksan ki surat mein aap hamain blame nahi karenge.
+                </div>
+                <button id="agreeBtn" onclick="finalizeSignup()" class="w-full btn-3d bg-emerald-600 py-4 rounded-2xl shadow-xl">I Read & Agree to All Terms</button>
+            </div>
+
+            <div id="loginForm" class="space-y-4">
+                <input type="email" id="userEmail" placeholder="Email Address" class="w-full border-2 p-4 rounded-2xl font-bold outline-none focus:border-indigo-600 bg-slate-50">
+                <input type="password" id="userPass" placeholder="Secure Password" class="w-full border-2 p-4 rounded-2xl font-bold outline-none focus:border-indigo-600 bg-slate-50">
+                <button onclick="handleAuth('login')" class="w-full btn-3d py-4 rounded-2xl shadow-lg">Login Securely</button>
+                <button onclick="showAgreement()" class="w-full text-slate-400 font-black text-[10px] uppercase underline italic">Don't have an account? Sign Up Here</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="mainApp" class="hidden">
+        <nav class="bg-slate-900 text-white p-5 sticky top-0 z-[100] flex justify-between items-center no-print shadow-2xl">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center font-black italic">LM</div>
+                <div>
+                    <h1 class="font-black uppercase text-xs tracking-tighter">Enterprise Dashboard</h1>
+                    <span id="displayUser" class="text-[9px] font-bold text-indigo-400 block lowercase"></span>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button onclick="showGuide()" class="btn-3d px-4 py-2 rounded-xl text-[10px] tip-parent" data-msg="Open Step-by-Step User Guide Book">Help Manual</button>
+                <button onclick="openConfig()" class="btn-3d btn-3d-amber px-4 py-2 rounded-xl text-[10px] tip-parent" data-msg="Rename features & change settings">Settings</button>
+                <button onclick="logout()" class="btn-3d btn-3d-rose px-4 py-2 rounded-xl text-[10px]">Logout</button>
+            </div>
+        </nav>
+
+        <div class="container mx-auto p-4 md:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <div class="lg:col-span-4 no-print">
+                <div class="bg-white p-6 rounded-[3rem] shadow-2xl border-t-[12px] border-indigo-600 sticky top-28">
+                    <form id="ledgerForm" class="space-y-4">
+                        <input type="hidden" id="editId">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input type="date" id="tDate" required class="w-full border-2 p-3 rounded-xl font-bold text-xs bg-slate-50">
+                            <select id="tMode" required class="w-full border-2 p-3 rounded-xl font-bold text-xs bg-slate-50">
+                                <option value="Cash">Cash (Naqd)</option>
+                                <option value="EasyPaisa">EasyPaisa</option>
+                                <option value="JazzCash">JazzCash</option>
+                                <option value="Bank">Bank Transfer</option>
+                                <option value="Udhaar">Udhaar (Pending)</option>
+                            </select>
+                        </div>
+                        <input list="partyList" id="tParty" placeholder="Party Name / Customer" required class="w-full border-2 p-3 rounded-xl font-bold text-sm bg-slate-50">
+                        <select id="tCat" onchange="toggleVisit(this.value)" required class="w-full border-2 p-3 rounded-xl font-bold text-sm bg-slate-50"></select>
+                        
+                        <div id="visitBox" class="bg-indigo-50 p-4 rounded-3xl hidden-module space-y-2 border-2 border-indigo-100">
+                            <input type="text" id="vPurpose" placeholder="Visit Reason / Diagnosis" class="w-full border p-2 rounded-lg text-xs font-bold">
+                            <div class="grid grid-cols-2 gap-2">
+                                <select id="vMode" class="w-full border p-2 rounded-lg text-xs font-bold"></select>
+                                <input type="number" id="vMisc" placeholder="Med Cost" class="w-full border p-2 rounded-lg text-xs font-bold">
+                            </div>
+                        </div>
+
+                        <textarea id="tDesc" placeholder="Remarks / Adjustment Notes..." class="w-full border-2 p-3 rounded-xl font-bold text-sm h-16 bg-slate-50"></textarea>
+                        <div class="bg-slate-900 p-6 rounded-[2.5rem] text-center shadow-inner">
+                            <input type="number" id="tAmount" placeholder="0.00" required class="w-full bg-transparent text-white font-black text-4xl text-center outline-none">
+                        </div>
+                        <button type="submit" id="submitBtn" class="btn-3d w-full bg-indigo-600 py-4 rounded-2xl shadow-xl">Save Transaction [Alt+S]</button>
+                        <button type="button" id="cancelEdit" onclick="resetForm()" class="hidden w-full text-rose-500 font-black text-[10px] uppercase">Cancel Edit</button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="lg:col-span-8 space-y-6">
+                <div class="flex flex-wrap gap-2 no-print">
+                    <input type="text" id="mSearch" oninput="render()" placeholder="🔍 Search Party, Date, Month, Adjustment..." class="flex-1 border-2 p-4 rounded-2xl font-black text-xs uppercase shadow-sm focus:border-indigo-500 outline-none">
+                    <button onclick="exportToExcel()" class="btn-3d btn-3d-emerald px-6 py-3 rounded-2xl text-[10px] tip-parent" data-msg="Export to Colorful Excel with Formulas">Excel</button>
+                    <button onclick="window.print()" class="btn-3d bg-slate-800 px-6 py-3 rounded-2xl text-[10px] tip-parent" data-msg="Print Statement">Print</button>
+                    <button onclick="exportSecureBackup()" class="btn-3d btn-3d-amber px-6 py-3 rounded-2xl text-[10px] tip-parent" data-msg="Lock Backup with Password">Backup</button>
+                    <button onclick="document.getElementById('importFile').click()" class="btn-3d bg-blue-600 px-6 py-3 rounded-2xl text-[10px] tip-parent" data-msg="Restore from Password Protected File">Restore</button>
+                    <input type="file" id="importFile" class="hidden" onchange="importSecureBackup(event)" accept=".ledger">
+                </div>
+
+                <div id="dash" class="grid grid-cols-2 md:grid-cols-4 gap-4"></div>
+
+                <div class="bg-white rounded-[3rem] shadow-2xl overflow-hidden border border-slate-200">
+                    <table class="w-full text-left text-sm">
+                        <thead class="bg-slate-900 text-white font-black uppercase italic text-[11px]">
+                            <tr><th class="p-4">Date/ID</th><th class="p-4">Details</th><th class="p-4 text-center">Cat</th><th class="p-4 text-right">Amount</th><th class="p-4 text-center no-print">Action</th></tr>
+                        </thead>
+                        <tbody id="tBody" class="font-bold divide-y divide-slate-100 italic"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="guideModal" class="fixed inset-0 bg-white z-[600] hidden flex flex-col p-6 md:p-12 overflow-y-auto">
+        <div class="max-w-4xl mx-auto w-full pb-20">
+            <h2 class="font-black text-5xl italic text-indigo-600 border-b-8 border-indigo-50 pb-6 mb-10 uppercase tracking-tighter">Software Guide Book</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div class="space-y-4">
+                    <h3 class="bg-slate-900 text-white px-6 py-2 rounded-full inline-block font-black text-xs uppercase">1. Basic Entry (Asan Tariqa)</h3>
+                    <p class="text-[11px] font-bold text-slate-600 leading-relaxed uppercase">
+                        • Sab se pehle tareekh aur **Cash List** (Cash/Bank/JazzCash) select karein.<br>
+                        • **Party Name:** Jis se lain dain ho rahi hai.<br>
+                        • **Category:** Agar maal sale kiya to "Income Sale", agar kharcha kiya to "Expense".<br>
+                        • **Save:** Amount likh kar Save ka button dabayein.
+                    </p>
+                </div>
+
+                <div class="space-y-4">
+                    <h3 class="bg-rose-600 text-white px-6 py-2 rounded-full inline-block font-black text-xs uppercase">2. Adjustment (Zaroori Misal)</h3>
+                    <p class="text-[11px] font-bold text-slate-600 leading-relaxed uppercase">
+                        • **Case:** Aap ne 12,000 ka maal sale karna tha lekin deal 5,000 mein final hui.<br>
+                        • **Entry:** Pehle 5,000 ki Income Sale entry karein.<br>
+                        • **Adjustment:** Baqi 7,000 ko khatam karne ke liye Category mein "Loss/Adjustment" select karein aur Remarks mein likhein "Deal Discounted from 12k to 5k". Is se aapka hisab clear ho jaye ga.
+                    </p>
+                </div>
+
+                <div class="space-y-4">
+                    <h3 class="bg-amber-500 text-white px-6 py-2 rounded-full inline-block font-black text-xs uppercase">3. Backup & Security Procedure</h3>
+                    <p class="text-[11px] font-bold text-slate-600 leading-relaxed uppercase">
+                        • **Cloud Backup:** Ye auto hota hai. Agar browser saaf ho jaye, to same email se login karke data wapas aa jata hai.<br>
+                        • **Manual Backup:** Rozana **Backup** button daba kar password set karein aur file download karein. Ye file aap ki sab se barri security hai.
+                    </p>
+                </div>
+
+                <div class="space-y-4">
+                    <h3 class="bg-indigo-600 text-white px-6 py-2 rounded-full inline-block font-black text-xs uppercase">4. Visit Module Guide</h3>
+                    <p class="text-[11px] font-bold text-slate-600 leading-relaxed uppercase">
+                        • Jab aap **Visit/Clinic Pro** select karenge, aik extra box khulay ga.<br>
+                        • Is mein Mareez ka masla aur Medicine ka kharcha alag likhein. Software khud hi total raqam hisab mein daal dega.
+                    </p>
+                </div>
+            </div>
+
+            <button onclick="closeGuide()" class="btn-3d w-full bg-slate-900 py-6 rounded-[2rem] mt-16">Close Guide Book</button>
+        </div>
+    </div>
+
+    <div id="configModal" class="fixed inset-0 bg-white z-[500] hidden flex flex-col no-print">
+        <div class="bg-slate-900 p-5 text-white flex justify-between items-center">
+            <h2 class="font-black uppercase text-xs">Software Configuration</h2>
+            <button onclick="closeConfig()" class="bg-rose-600 px-6 py-2 rounded-xl text-[10px] font-black uppercase">Close</button>
+        </div>
+        <div class="p-8 flex-1 bg-slate-50 overflow-y-auto space-y-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div><label class="text-[10px] font-black uppercase text-slate-400">Date Display Format</label>
+                <select id="cfgDateFormat" onchange="render()" class="w-full border-b-2 p-2 font-bold bg-transparent outline-none">
+                    <option value="YYYY-MM-DD">Year-Month-Day</option><option value="DD/MM/YYYY">Day/Month/Year</option>
+                </select></div>
+                <div><label class="text-[10px] font-black uppercase text-slate-400">Visit List Options</label>
+                <input type="text" id="cfgVisitList" class="w-full border-b-2 p-2 font-bold bg-transparent outline-none"></div>
+            </div>
+            <div id="configGrid" class="grid grid-cols-1 md:grid-cols-3 gap-4"></div>
+        </div>
+        <div class="p-6 bg-white border-t flex gap-4">
+            <button onclick="factoryReset()" class="bg-slate-200 px-8 py-4 rounded-3xl font-black text-[10px] uppercase">Factory Reset</button>
+            <button onclick="saveConfig()" class="btn-3d flex-1 bg-indigo-600 py-4 rounded-3xl shadow-2xl">Apply & Save Settings</button>
+        </div>
+    </div>
+
+    <datalist id="partyList"></datalist>
+
+    <script>
+        // FIREBASE SETUP
+        const firebaseConfig = {
+            apiKey: "AIzaSyDzSEb2I1VXKQtrRj6XwzCB4lwC7T4X1go",
+            authDomain: "ikraamledger.firebaseapp.com",
+            databaseURL: "https://ikraamledger-default-rtdb.firebaseio.com",
+            projectId: "ikraamledger",
+            storageBucket: "ikraamledger.firebasestorage.app",
+            messagingSenderId: "992347779396",
+            appId: "1:992347779396:web:8251534d4358587bf5a711"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth(), rdb = firebase.database();
+        let currentUser = null;
+
+        const CODES = ["INC-01", "EXP-01", "OFFICE-BILL", "INC-08", "INC-05", "EXP-03", "INC-04", "EXP-04", "EXP-05"];
+        const DEFAULTS = {
+            labels: {"INC-01":"Income Sale","EXP-01":"Expense","OFFICE-BILL":"Visit/Clinic Pro","INC-08":"Visit Recovery","INC-05":"Borrowing (Loan Taken)","EXP-03":"Loan Given","INC-04":"Udhaar Recv.","EXP-04":"Udhaar Diya","EXP-05":"Loss/Adjustment"},
+            visible: CODES.reduce((a,c)=>({...a,[c]:true}), {}),
+            visitList: "Standard, Home Visit, Emergency",
+            dateFormat: 'YYYY-MM-DD'
+        };
+        let db = { entries: [], parties: [], ...DEFAULTS };
+
+        // AUTH SYSTEM
+        function showAgreement() {
+            document.getElementById('loginForm').classList.add('hidden');
+            document.getElementById('agreementContainer').classList.remove('hidden');
+        }
+
+        function finalizeSignup() {
+            const e = document.getElementById('userEmail').value, p = document.getElementById('userPass').value;
+            if(!e || !p) return alert("Email/Password Required!");
+            showLoader(true);
+            auth.createUserWithEmailAndPassword(e,p).catch(err=>alert(err.message)).finally(()=>showLoader(false));
+        }
+
+        function handleAuth(t) {
+            const e = document.getElementById('userEmail').value, p = document.getElementById('userPass').value;
+            if(!e || !p) return alert("Email/Password Required!");
+            showLoader(true);
+            auth.signInWithEmailAndPassword(e,p).catch(err=>alert(err.message)).finally(()=>showLoader(false));
+        }
+
+        auth.onAuthStateChanged(user => {
+            if(user) { 
+                currentUser = user; 
+                document.getElementById('displayUser').innerText = `Enterprise User: ${user.email}`;
+                document.getElementById('authSection').classList.add('hidden'); 
+                document.getElementById('mainApp').classList.remove('hidden'); 
+                loadData(); 
+            } else { 
+                document.getElementById('authSection').classList.remove('hidden'); 
+                document.getElementById('mainApp').classList.add('hidden'); 
+            }
+        });
+
+        function loadData() {
+            rdb.ref('users/' + currentUser.uid).on('value', snap => {
+                if(snap.exists()) { db = {...db, ...snap.val()}; render(); }
+                else save();
+            });
+        }
+        function save() { if(currentUser) rdb.ref('users/' + currentUser.uid).set(db); }
+        function logout() { if(confirm("Are you sure you want to logout?")) auth.signOut(); }
+
+        // CORE RENDER
+        function render() {
+            const catS = document.getElementById('tCat'); catS.innerHTML = '<option value="">Select Category</option>';
+            CODES.forEach(c => { if(db.visible[c]) catS.appendChild(new Option(db.labels[c], c)); });
+            const vModeS = document.getElementById('vMode'); vModeS.innerHTML = '';
+            db.visitList.split(',').forEach(v => vModeS.appendChild(new Option(v.trim(), v.trim())));
+
+            const tbody = document.getElementById('tBody'); tbody.innerHTML = '';
+            const q = document.getElementById('mSearch').value.toLowerCase();
+            const fmt = document.getElementById('cfgDateFormat').value;
+            let s = { cash: 0, rec: 0, off: 0, loan: 0 };
+
+            (db.entries || []).forEach(t => {
+                const searchTxt = `${t.party} ${db.labels[t.cat]} ${t.desc} ${t.date} ${t.mode}`.toLowerCase();
+                if(!q || searchTxt.includes(q)) {
+                    const isInc = t.cat.startsWith('INC'), amt = parseFloat(t.amount);
+                    if(t.mode !== 'Udhaar') s.cash += (isInc ? amt : -amt);
+                    if(t.cat === 'EXP-04') s.rec += amt; if(t.cat === 'INC-04') s.rec -= amt;
+                    if(t.cat === 'OFFICE-BILL') s.off += amt; if(t.cat === 'INC-08') s.off -= amt;
+                    if(t.cat === 'INC-05') s.loan += amt; if(t.cat === 'EXP-03') s.loan -= amt;
+
+                    let dDate = t.date;
+                    if(fmt === 'DD/MM/YYYY') { const [y,m,d] = t.date.split('-'); dDate = `${d}/${m}/${y}`; }
+
+                    tbody.innerHTML += `<tr class="hover:bg-indigo-50/50 italic border-b border-slate-50 transition-all">
+                        <td class="p-4 text-slate-400 font-normal">#${t.id.toString().slice(-4)}<br>${dDate}</td>
+                        <td class="p-4 uppercase"><b>${t.party}</b><br><small class="text-slate-500 font-normal">${t.desc}</small></td>
+                        <td class="p-4 text-center">
+                            <span class="text-[9px] font-black uppercase bg-slate-100 p-1.5 rounded-lg">${db.labels[t.cat]}</span><br>
+                            <span class="text-[8px] font-black text-indigo-400 uppercase">${t.mode}</span>
+                        </td>
+                        <td class="p-4 text-right font-black text-lg ${isInc?'text-emerald-600':'text-rose-600'} amount-val">${amt.toLocaleString()}</td>
+                        <td class="p-4 text-center no-print flex gap-2 justify-center">
+                            <button onclick="editEntry(${t.id})" class="text-blue-400 hover:text-blue-600">✎</button>
+                            <button onclick="deleteEntry(${t.id})" class="text-rose-300 hover:text-rose-600">🗑</button>
+                        </td>
+                    </tr>`;
+                }
+            });
+            updateDash(s);
+            updatePartyList();
+        }
+
+        function updateDash(s) {
+            document.getElementById('dash').innerHTML = `
+                <div class="bg-white p-5 rounded-[2.5rem] border-b-8 border-slate-900 shadow-xl text-center"><p class="text-[9px] font-black text-slate-400 uppercase">Cash Bal</p><h2 class="font-black text-2xl amount-val">${s.cash.toLocaleString()}</h2></div>
+                <div class="bg-white p-5 rounded-[2.5rem] border-b-8 border-emerald-500 shadow-xl text-center"><p class="text-[9px] font-black text-emerald-500 uppercase">Receivable</p><h2 class="font-black text-2xl text-emerald-700 amount-val">${s.rec.toLocaleString()}</h2></div>
+                <div class="bg-white p-5 rounded-[2.5rem] border-b-8 border-amber-500 shadow-xl text-center"><p class="text-[9px] font-black text-amber-500 uppercase">Clinic Pro</p><h2 class="font-black text-2xl text-amber-700 amount-val">${s.off.toLocaleString()}</h2></div>
+                <div class="bg-white p-5 rounded-[2.5rem] border-b-8 border-rose-500 shadow-xl text-center"><p class="text-[9px] font-black text-rose-500 uppercase">Loan Taken</p><h2 class="font-black text-2xl text-rose-700 amount-val">${s.loan.toLocaleString()}</h2></div>`;
+        }
+
+        // EDIT & SUBMIT
+        function editEntry(id) {
+            const t = db.entries.find(x=>x.id===id);
+            if(!t) return;
+            document.getElementById('editId').value = t.id;
+            document.getElementById('tDate').value = t.date;
+            document.getElementById('tParty').value = t.party;
+            document.getElementById('tCat').value = t.cat;
+            document.getElementById('tMode').value = t.mode;
+            document.getElementById('tDesc').value = t.desc;
+            document.getElementById('tAmount').value = t.amount;
+            document.getElementById('submitBtn').innerText = "Update Transaction";
+            document.getElementById('cancelEdit').classList.remove('hidden');
+            document.getElementById('ledgerForm').scrollIntoView({behavior:'smooth'});
+        }
+
+        document.getElementById('ledgerForm').onsubmit = (e) => {
+            e.preventDefault();
+            const editId = document.getElementById('editId').value;
+            let amt = parseFloat(document.getElementById('tAmount').value), desc = document.getElementById('tDesc').value, cat = document.getElementById('tCat').value;
+            
+            if(cat === 'OFFICE-BILL' && !editId) {
+                const med = parseFloat(document.getElementById('vMisc').value) || 0;
+                amt += med; desc = `[${document.getElementById('vMode').value}] ` + desc + (med > 0 ? ` (Med: ${med})` : '');
+            }
+
+            const data = { id: editId ? parseInt(editId) : Date.now(), date: document.getElementById('tDate').value, party: document.getElementById('tParty').value, cat, mode: document.getElementById('tMode').value, desc, amount: amt };
+
+            if(editId) {
+                const idx = db.entries.findIndex(x=>x.id===parseInt(editId));
+                db.entries[idx] = data;
+            } else {
+                db.entries.unshift(data);
+                if(!db.parties.includes(data.party)) db.parties.push(data.party);
+            }
+            save(); resetForm();
+        };
+
+        function resetForm() {
+            document.getElementById('ledgerForm').reset();
+            document.getElementById('editId').value = "";
+            document.getElementById('submitBtn').innerText = "Save Transaction [Alt+S]";
+            document.getElementById('cancelEdit').classList.add('hidden');
+        }
+
+        // BACKUP & EXCEL
+        function exportSecureBackup() {
+            const pass = prompt("Create Backup Password:");
+            if(!pass) return;
+            const data = btoa(unescape(encodeURIComponent(JSON.stringify({ db, pass: btoa(pass) }))));
+            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([data], {type:"text/plain"})); a.download = `Ledger_Backup_${Date.now()}.ledger`; a.click();
+        }
+
+        function importSecureBackup(e) {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                const dec = JSON.parse(decodeURIComponent(escape(atob(ev.target.result))));
+                const p = prompt("Enter Password:");
+                if(btoa(p) === dec.pass) { db = dec.db; save(); alert("Data Restored!"); }
+                else alert("Wrong Password!");
+            };
+            reader.readAsText(e.target.files[0]);
+        }
+
+        function exportToExcel() {
+            const rows = db.entries.map(t=>({ Date: t.date, Party: t.party, Category: db.labels[t.cat], Mode: t.mode, Amount: t.amount, Note: t.desc }));
+            const ws = XLSX.utils.json_to_sheet(rows);
+            ws['!cols'] = [{wch:15},{wch:25},{wch:20},{wch:15},{wch:15},{wch:50}];
+            ws['!rows'] = rows.map(()=>({hpt:25})); // Row height 25-30
+            const last = rows.length + 1;
+            XLSX.utils.sheet_add_aoa(ws, [["TOTAL:", {f:`SUM(E2:E${last})`}]], {origin:`D${last+1}`});
+            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Report");
+            XLSX.writeFile(wb, "MyLedger_v108.xlsx");
+        }
+
+        // CONFIG
+        function openConfig() {
+            const g = document.getElementById('configGrid'); g.innerHTML = '';
+            CODES.forEach(c => {
+                g.innerHTML += `<div class="bg-white p-4 rounded-3xl border-2 border-slate-50 flex items-center gap-4">
+                    <input type="checkbox" id="vis_${c}" ${db.visible[c]?'checked':''} class="w-6 h-6 accent-indigo-600">
+                    <div class="flex-1">
+                        <label class="text-[8px] font-black text-slate-400 uppercase">${c}</label>
+                        <input type="text" id="lbl_${c}" value="${db.labels[c]}" class="w-full border-b font-bold outline-none uppercase text-xs">
+                    </div>
+                </div>`;
+            });
+            document.getElementById('cfgDateFormat').value = db.dateFormat;
+            document.getElementById('cfgVisitList').value = db.visitList;
+            document.getElementById('configModal').classList.remove('hidden');
+        }
+        function saveConfig() {
+            CODES.forEach(c => { db.visible[c] = document.getElementById(`vis_${c}`).checked; db.labels[c] = document.getElementById(`lbl_${c}`).value; });
+            db.dateFormat = document.getElementById('cfgDateFormat').value;
+            db.visitList = document.getElementById('cfgVisitList').value;
+            save(); closeConfig(); render();
+        }
+        function factoryReset() { if(confirm("Wipe Settings?")) { db = {...db, ...DEFAULTS}; save(); render(); closeConfig(); } }
+
+        function showLoader(s) { document.getElementById('loader').classList.toggle('hidden', !s); }
+        function closeConfig() { document.getElementById('configModal').classList.add('hidden'); }
+        function showGuide() { document.getElementById('guideModal').classList.remove('hidden'); }
+        function closeGuide() { document.getElementById('guideModal').classList.add('hidden'); }
+        function toggleVisit(v) { document.getElementById('visitBox').classList.toggle('hidden-module', v !== 'OFFICE-BILL'); }
+        function deleteEntry(id) { if(confirm("Delete?")) { db.entries = db.entries.filter(x=>x.id!==id); save(); } }
+        function updatePartyList() { const pL = document.getElementById('partyList'); pL.innerHTML = ''; (db.parties || []).forEach(p => pL.innerHTML += `<option value="${p}">`); }
+        window.onkeydown = e => { if(e.altKey && e.key === 's') document.querySelector('#submitBtn').click(); };
+    </script>
+</body>
+</html>
