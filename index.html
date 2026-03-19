@@ -92,8 +92,35 @@ function editEntry(id){const t=db.entries.find(x=>Number(x.id)===Number(id));if(
 async function deleteEntry(id){if(!confirm("Delete this entry?"))return;try{showLoader(true);db.entries=db.entries.filter(x=>Number(x.id)!==Number(id));await saveData();render()}catch(err){alert("Delete error: "+err.message)}finally{showLoader(false)}}
 function rowsForExport(){return getFilteredEntries().map(t=>({Date:t.date,Party:t.party,Category:categoryLabel(t.cat),Type:categoryType(t.cat),Mode:t.mode,Amount:Number(t.amount)||0,Tag:t.tag||"",Note:t.desc||"",VisitPurpose:t.visit?.purpose||"",VisitType:t.visit?.mode||"",MedicineCost:Number(t.visit?.medCost)||0}))}
 function exportToExcel(){const rows=rowsForExport();const ws=XLSX.utils.json_to_sheet(rows);ws['!cols']=[{wch:14},{wch:22},{wch:22},{wch:16},{wch:12},{wch:12},{wch:16},{wch:28},{wch:18},{wch:18},{wch:14}];const totalRow=rows.length+2;XLSX.utils.sheet_add_aoa(ws,[["","","","","TOTAL",{f:`SUM(F2:F${rows.length+1})`}]],{origin:`A${totalRow}`});const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"MyLedger Report");XLSX.writeFile(wb,"MyLedger_Report.xlsx")}
-function shareWhatsApp(){const entries=getFilteredEntries();const sums=calc(entries);const lines=[$("printReportTitle").textContent,$("printReportMeta").textContent,""];entries.slice(0,25).forEach((t,i)=>lines.push(`${i+1}. ${t.party} | ${categoryLabel(t.cat)} | ${formatDate(t.date)} | ${Number(t.amount).toLocaleString()}`));if(entries.length>25)lines.push(`... aur ${entries.length-25} records`);lines.push("",`Income: ${sums.income.toLocaleString()} | Expense: ${sums.expense.toLocaleString()} | Net: ${sums.balance.toLocaleString()}`);window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("
-"))}`,'_blank')}
+function shareWhatsApp(){
+  const entries = getFilteredEntries();
+  const sums = calc(entries);
+  const lines = [
+    $("printReportTitle").textContent,
+    $("printReportMeta").textContent,
+    ""
+  ];
+
+  entries.slice(0, 25).forEach((t, i) => {
+    lines.push(
+      `${i + 1}. ${t.party} | ${categoryLabel(t.cat)} | ${formatDate(t.date)} | ${Number(t.amount).toLocaleString()}`
+    );
+  });
+
+  if (entries.length > 25) {
+    lines.push(`... aur ${entries.length - 25} records`);
+  }
+
+  lines.push(
+    "",
+    `Income: ${sums.income.toLocaleString()} | Expense: ${sums.expense.toLocaleString()} | Net: ${sums.balance.toLocaleString()}`
+  );
+
+  window.open(
+    `https://wa.me/?text=${encodeURIComponent(lines.join("\\n"))}`,
+    "_blank"
+  );
+}
 function arrayBufferToBase64(buffer){const bytes=new Uint8Array(buffer);let binary="";for(let i=0;i<bytes.length;i++)binary+=String.fromCharCode(bytes[i]);return btoa(binary)}
 function base64ToArrayBuffer(base64){const binary=atob(base64);const bytes=new Uint8Array(binary.length);for(let i=0;i<binary.length;i++)bytes[i]=binary.charCodeAt(i);return bytes.buffer}
 async function getPasswordKey(password){return crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveKey"])}
